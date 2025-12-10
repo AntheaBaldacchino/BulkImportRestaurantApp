@@ -2,6 +2,7 @@ using BulkImportRestaurantApp.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using BulkImportRestaurantApp.Infrastructure;
+using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,4 +44,8 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}");
 app.MapRazorPages();
 
+Debug.WriteLine("Application started.");
+Debug.WriteLine(AppSettings.SiteAdminEmail);
+
 app.Run();
+
