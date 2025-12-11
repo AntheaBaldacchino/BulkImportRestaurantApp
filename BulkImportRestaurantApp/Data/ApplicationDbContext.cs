@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+﻿using BulkImportRestaurantApp.Models;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace BulkImportRestaurantApp.Data
@@ -8,6 +9,10 @@ namespace BulkImportRestaurantApp.Data
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options)
         {
+
         }
+
+        public DbSet<Restaurant> Restaurants { get; set; }
+        public DbSet<MenuItem> MenuItems { get; set; }
     }
 }
