@@ -1,80 +1,192 @@
-﻿using BulkImportRestaurantApp.Factories;
-using Microsoft.AspNetCore.Mvc;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Threading.Tasks;
+using BulkImportRestaurantApp.Factories;
+using BulkImportRestaurantApp.Models;
 using BulkImportRestaurantApp.Models.Interfaces;
-
-
-
-
+using BulkImportRestaurantApp.Repositories;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace BulkImportRestaurantApp.Controllers
 {
     public class BulkImportController : Controller
     {
-
         private readonly ImportItemFactory _factory;
-        private readonly IItemsRepository _memoryRepo;
+        private readonly ILogger<BulkImportController> _logger;
 
-        public BulkImportController(ImportItemFactory factory,
-
-            [FromKeyedServices("memory")] IItemsRepository memoryRepo)
+        public BulkImportController(
+            ImportItemFactory factory,
+            ILogger<BulkImportController> logger)
         {
-             _factory = factory;
-            _memoryRepo = memoryRepo;
+            _factory = factory;
+            _logger = logger;
         }
 
-        // GET: BulkImport
-        public IActionResult BulkImport()
+        // STEP 1: Show upload page
+        [HttpGet]
+        public IActionResult Index()
         {
             return View();
         }
 
-        // POST: BulkImport
+        // STEP 2: Upload JSON, parse, store in memory, show preview
         [HttpPost]
-        public IActionResult BulkImport(IFormFile jsonFile)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Index(
+            IFormFile jsonFile,
+            [FromKeyedServices("memory")] IItemsRepository memoryRepository)
         {
-            if (jsonFile == null)
+            if (jsonFile == null || jsonFile.Length == 0)
             {
-                ModelState.AddModelError("", "Upload a JSON file.");
+                ModelState.AddModelError(string.Empty, "Please upload a JSON file.");
                 return View();
             }
 
-            using var stream = jsonFile.OpenReadStream();
-            using var reader = new StreamReader(stream);
-            string json = reader.ReadToEnd();
+            string json;
+            using (var reader = new StreamReader(jsonFile.OpenReadStream()))
+            {
+                json = await reader.ReadToEndAsync();
+            }
 
-            // Use factory to parse JSON → produce restaurant/menuitems
-            var items = _factory.Create(json);
+            List<IItemValidating> items;
 
-            // Store temporarily in memory
-            _memoryRepo.Save(items);
+            try
+            {
+                items = _factory.Create(json);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to parse JSON during bulk import.");
+                ModelState.AddModelError(string.Empty, "Invalid JSON format.");
+                return View();
+            }
 
-            // Show preview
+            // Store parsed items in memory (pending, not yet in DB)
+            await memoryRepository.SaveAsync(items);
+
+            // Show preview view strongly typed to IEnumerable<IItemValidating>
             return View("Preview", items);
         }
 
-        [HttpPost]
-        public IActionResult Commit(IFormFile zipFile,
-            [FromKeyedServices("memory")] IItemsRepository itemsRepos,
-            [FromKeyedServices("db")] IItemsRepository db)
+        // STEP 3: Generate ZIP of default images (one folder per item)
+        [HttpGet]
+        public async Task<IActionResult> DownloadImageTemplate(
+            [FromKeyedServices("memory")] IItemsRepository memoryRepository)
         {
-
-            if(zipFile == null){
-                        
-                return BadRequest("Zip file is required.");
+            var items = await memoryRepository.GetAsync();
+            if (items == null || items.Count == 0)
+            {
+                return BadRequest("No items in memory. Upload a JSON file first.");
             }
 
-            var items = itemsRepos.Get();
+            var zipBytes = GenerateDefaultImagesZip(items);
+            return File(zipBytes, "application/zip", "items-images-template.zip");
+        }
 
-            
+        // STEP 4: Commit – upload images ZIP, save to DB, clear memory
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Commit(
+            IFormFile imagesZip,
+            [FromKeyedServices("memory")] ItemsInMemoryRepository memoryRepository,
+            [FromKeyedServices("database")] ItemsDbRepository dbRepository,
+            [FromServices] IWebHostEnvironment env)
+        {
+            if (imagesZip == null || imagesZip.Length == 0)
+            {
+                ModelState.AddModelError(string.Empty, "Please upload a ZIP file with images.");
+                return RedirectToAction("Index");
+            }
 
+            var pendingItems = await memoryRepository.GetAsync();
+            if (pendingItems == null || pendingItems.Count == 0)
+            {
+                ModelState.AddModelError(string.Empty, "No pending items found. Upload JSON first.");
+                return RedirectToAction("Index");
+            }
 
-            // In a real app, save to database here
-            db.Save(items);
+            var webRoot = env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+            var imagesRoot = Path.Combine(webRoot, "images", "items");
+            Directory.CreateDirectory(imagesRoot);
 
-            // Clear memory repo
-            _memoryRepo.Clear();
+            using var zipStream = imagesZip.OpenReadStream();
+            using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
 
-            return RedirectToAction("Index", "Items");
+            // Take all file entries, sorted, and map to items by index
+            var imageEntries = archive.Entries
+                .Where(e => !string.IsNullOrEmpty(e.Name))
+                .OrderBy(e => e.FullName)
+                .ToList();
+
+            var index = 0;
+            foreach (var item in pendingItems)
+            {
+                if (index >= imageEntries.Count)
+                {
+                    break;
+                }
+
+                var entry = imageEntries[index];
+                index++;
+
+                var extension = Path.GetExtension(entry.Name);
+                if (string.IsNullOrWhiteSpace(extension))
+                {
+                    extension = ".jpg";
+                }
+
+                var uniqueFileName = $"{Guid.NewGuid()}{extension}";
+                var itemFolder = Path.Combine(imagesRoot, $"item-{index}");
+                Directory.CreateDirectory(itemFolder);
+
+                var physicalPath = Path.Combine(itemFolder, uniqueFileName);
+
+                await using (var fileStream = System.IO.File.Create(physicalPath))
+                await using (var entryStream = entry.Open())
+                {
+                    await entryStream.CopyToAsync(fileStream);
+                }
+
+                var relativePath = Path.Combine("images", "items", $"item-{index}", uniqueFileName)
+                    .Replace("\\", "/");
+
+                // For now, only Restaurant has ImagePath in your DB schema.
+                if (item is Restaurant restaurant)
+                {
+                    restaurant.ImagePath = relativePath;
+                }
+
+                // If you later add ImagePath to MenuItem, set it here too.
+            }
+
+            await dbRepository.SaveAsync(pendingItems);
+            await memoryRepository.ClearAsync();
+
+            // Later you'll redirect to ItemsController.Catalog
+            return RedirectToAction("Index", "Home");
+        }
+
+        // Helper: create default.jpg folders zip
+        private static byte[] GenerateDefaultImagesZip(IReadOnlyList<IItemValidating> items)
+        {
+            using var memoryStream = new MemoryStream();
+            using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, leaveOpen: true))
+            {
+                for (var i = 0; i < items.Count; i++)
+                {
+                    // Example: item-1/default.jpg
+                    var entry = archive.CreateEntry($"item-{i + 1}/default.jpg");
+                    using var entryStream = entry.Open();
+                    // empty file is fine as placeholder
+                }
+            }
+
+            return memoryStream.ToArray();
         }
     }
 }

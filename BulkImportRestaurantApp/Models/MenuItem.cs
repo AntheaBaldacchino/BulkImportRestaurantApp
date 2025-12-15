@@ -12,7 +12,7 @@ namespace BulkImportRestaurantApp.Models
 
         [Required]
         [MaxLength(150)]
-        public string Title { get; set; } 
+        public string Title { get; set; } = string.Empty;
         [Required]
         [Column(TypeName = "decimal(18, 2)")]
         public decimal Price { get; set; }
@@ -21,14 +21,9 @@ namespace BulkImportRestaurantApp.Models
         public int RestaurantId { get; set; }
 
         [ForeignKey(nameof(RestaurantId))]
-        public Restaurant Restaurant { get; set; }
-
-
-
-
+        public Restaurant Restaurant { get; set; } = null!;
 
         [Required]
-
         public ItemStatus Status { get; set; } = ItemStatus.Pending;
 
         public string GetCardPartial()

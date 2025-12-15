@@ -1,9 +1,7 @@
-﻿namespace BulkImportRestaurantApp.Models.Interfaces
+﻿using BulkImportRestaurantApp.Models.Interfaces;
+
+public interface IItemsRepository
 {
-    public interface IItemsRepository
-    {
-        List<IItemValidating> Get();
-        void Save(List<IItemValidating> items);
-        void Clear();
-    }
+    Task SaveAsync(IEnumerable<IItemValidating> items);
+    Task<IReadOnlyList<IItemValidating>> GetAsync();
 }

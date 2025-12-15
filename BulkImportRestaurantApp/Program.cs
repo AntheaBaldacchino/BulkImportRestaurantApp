@@ -1,11 +1,14 @@
 using BulkImportRestaurantApp.Data;
+using BulkImportRestaurantApp.Infrastructure;
+using BulkImportRestaurantApp.Models.Interfaces;
+using BulkImportRestaurantApp.Repositories;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using BulkImportRestaurantApp.Infrastructure;
-using System.Diagnostics;
-using BulkImportRestaurantApp.Repositories;
 using Microsoft.Extensions.Caching.Memory;
+using System.Diagnostics;
 
+
+using Microsoft.AspNetCore.Mvc; 
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,6 +23,11 @@ builder.Services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.Requ
     .AddEntityFrameworkStores<ApplicationDbContext>();
 builder.Services.AddControllersWithViews();
 
+
+builder.Services.AddKeyedScoped<IItemsRepository, ItemsInMemoryRepository>("memory");
+builder.Services.AddKeyedScoped<IItemsRepository, ItemsDbRepository>("database");
+
+builder.Services.AddMemoryCache();
 AppSettings.SiteAdminEmail = builder.Configuration["SiteAdmin:Email"];
 
 var app = builder.Build();
