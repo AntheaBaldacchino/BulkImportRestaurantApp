@@ -24,10 +24,11 @@ builder.Services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.Requ
 builder.Services.AddControllersWithViews();
 
 
+builder.Services.AddMemoryCache();
+
 builder.Services.AddKeyedScoped<IItemsRepository, ItemsInMemoryRepository>("memory");
 builder.Services.AddKeyedScoped<IItemsRepository, ItemsDbRepository>("database");
 
-builder.Services.AddMemoryCache();
 AppSettings.SiteAdminEmail = builder.Configuration["SiteAdmin:Email"];
 
 var app = builder.Build();

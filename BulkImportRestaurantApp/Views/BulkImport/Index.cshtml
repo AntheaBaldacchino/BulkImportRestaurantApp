@@ -1,0 +1,26 @@
+﻿@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@{
+    ViewData["Title"] = "Bulk Import";
+}
+<h1>Bulk Import</h1>
+
+<form asp-action="Index" asp-asp-controller="BulkImport" method="post" enctype="multipart/form-data">
+
+    <div class="mb-3">
+        <label for="jsonFile" class="form-label">
+            Json File
+        </label>
+
+        <input type="file" name="jsonFile" id="jsonFile" class="form-control" accept=".json"/>
+    </div>
+    
+
+
+    <button type="submit" class="btn btn-primary">
+        Upload
+    </button>
+
+
+</form>
