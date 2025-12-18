@@ -43,3 +43,21 @@
 
 </table>
 
+<div>
+    <a asp-action="DownloadImageTemplate" asp-controller="BulkImport" class="btn btn-secondary">
+        Download Image Template ZIP
+    </a>
+</div>
+
+<form asp-action="Commit" asp-controller="BulkImport" method="post" enctype="multipart/form-data">
+    @Html.AntiForgeryToken()
+
+    <div class="mb-3">
+        <label for="imagesZip" class="form-label">Upload images ZIP</label>
+        <input type="file" name="imagesZip" id="imagesZip" class="form-control" accept=".zip" />
+    </div>
+
+    <button type="submit" class="btn btn-success">
+        Commit to Database
+    </button>
+</form>

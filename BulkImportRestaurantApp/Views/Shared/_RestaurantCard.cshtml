@@ -1,0 +1,25 @@
+﻿@model BulkImportRestaurantApp.Models.Restaurant
+@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+
+<div class="card h-100">
+    @if (!string.IsNullOrEmpty(Model.ImagePath))
+    {
+        <img class="card-img-top" src="~/@Model.ImagePath" alt="@Model.Name" />
+    }
+    <div class="card-body">
+        <h5 class="card-title">@Model.Name</h5>
+        <p class="card-text">
+            Owner: @Model.OwnerEmailAddress
+        </p>
+        <a asp-controller="Items"
+            asp-action="Catalog"
+            asp-route-view="menu"
+            asp-route-restaurantId="@Model.Id"
+            class="btn btn-sm btn-primary">
+            View menu
+        </a>
+    </div>
+</div>
+
