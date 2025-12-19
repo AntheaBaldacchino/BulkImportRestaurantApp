@@ -11,6 +11,7 @@ using BulkImportRestaurantApp.Repositories;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Hosting;
 
 namespace BulkImportRestaurantApp.Controllers
 {
@@ -18,23 +19,24 @@ namespace BulkImportRestaurantApp.Controllers
     {
         private readonly ImportItemFactory _factory;
         private readonly ILogger<BulkImportController> _logger;
+        private readonly IWebHostEnvironment _env;
 
         public BulkImportController(
-            ImportItemFactory factory,
-            ILogger<BulkImportController> logger)
+          ImportItemFactory factory,
+          ILogger<BulkImportController> logger,
+          IWebHostEnvironment env)
         {
             _factory = factory;
             _logger = logger;
+            _env = env;
         }
 
-        // STEP 1: Show upload page
         [HttpGet]
         public IActionResult Index()
         {
             return View();
         }
 
-        // STEP 2: Upload JSON, parse, store in memory, show preview
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Index(
@@ -66,14 +68,11 @@ namespace BulkImportRestaurantApp.Controllers
                 return View();
             }
 
-            // Store parsed items in memory (pending, not yet in DB)
             await memoryRepository.SaveAsync(items);
 
-            // Show preview view strongly typed to IEnumerable<IItemValidating>
             return View("Preview", items);
         }
 
-        // STEP 3: Generate ZIP of default images (one folder per item)
         [HttpGet]
         public async Task<IActionResult> DownloadImageTemplate(
             [FromKeyedServices("memory")] IItemsRepository memoryRepository)
@@ -88,14 +87,13 @@ namespace BulkImportRestaurantApp.Controllers
             return File(zipBytes, "application/zip", "items-images-template.zip");
         }
 
-        // STEP 4: Commit – upload images ZIP, save to DB, clear memory
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Commit(
-            IFormFile imagesZip,
-            [FromKeyedServices("memory")] ItemsInMemoryRepository memoryRepository,
-            [FromKeyedServices("database")] ItemsDbRepository dbRepository,
-            [FromServices] IWebHostEnvironment env)
+     IFormFile imagesZip,
+     [FromKeyedServices("memory")] ItemsInMemoryRepository memoryRepository,
+     [FromKeyedServices("database")] ItemsDbRepository dbRepository)
+
         {
             if (imagesZip == null || imagesZip.Length == 0)
             {
@@ -110,14 +108,13 @@ namespace BulkImportRestaurantApp.Controllers
                 return RedirectToAction("Index");
             }
 
-            var webRoot = env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+            var webRoot = _env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
             var imagesRoot = Path.Combine(webRoot, "images", "items");
             Directory.CreateDirectory(imagesRoot);
 
             using var zipStream = imagesZip.OpenReadStream();
             using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
 
-            // Take all file entries, sorted, and map to items by index
             var imageEntries = archive.Entries
                 .Where(e => !string.IsNullOrEmpty(e.Name))
                 .OrderBy(e => e.FullName)
@@ -155,23 +152,23 @@ namespace BulkImportRestaurantApp.Controllers
                 var relativePath = Path.Combine("images", "items", $"item-{index}", uniqueFileName)
                     .Replace("\\", "/");
 
-                // For now, only Restaurant has ImagePath in your DB schema.
+     
                 if (item is Restaurant restaurant)
                 {
                     restaurant.ImagePath = relativePath;
                 }
 
-                // If you later add ImagePath to MenuItem, set it here too.
             }
 
             await dbRepository.SaveAsync(pendingItems);
-            await memoryRepository.ClearAsync();
-
-            // Later you'll redirect to ItemsController.Catalog
+            if (memoryRepository is ItemsInMemoryRepository memRepo)
+            {
+                await memRepo.ClearAsync();
+            }
             return RedirectToAction("Index", "Home");
         }
 
-        // Helper: create default.jpg folders zip
+  
         private static byte[] GenerateDefaultImagesZip(IReadOnlyList<IItemValidating> items)
         {
             using var memoryStream = new MemoryStream();
@@ -179,10 +176,10 @@ namespace BulkImportRestaurantApp.Controllers
             {
                 for (var i = 0; i < items.Count; i++)
                 {
-                    // Example: item-1/default.jpg
+       
                     var entry = archive.CreateEntry($"item-{i + 1}/default.jpg");
                     using var entryStream = entry.Open();
-                    // empty file is fine as placeholder
+
                 }
             }
 

@@ -1,0 +1,93 @@
+﻿@using BulkImportRestaurantApp.Models
+@using BulkImportRestaurantApp.Models.Interfaces
+@model IEnumerable<IItemValidating>
+
+@{
+    var context = (string?)ViewBag.Context ?? "admin-restaurants";
+}
+
+<h2>Pending approvals</h2>
+
+@if (context == "admin-restaurants" || context == "owner-restaurants")
+{
+    <p>
+        @if (context == "admin-restaurants")
+        {
+            <strong>Site admin:</strong>
+           
+        }
+        else
+        {
+            <strong>Your restaurants:</strong>
+            
+        }
+    </p>
+
+    <table class="table table-striped table-bordered">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Owner</th>
+                <th>Status</th>
+                @if (context == "owner-restaurants")
+                {
+                    <th></th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var restaurant in Model.OfType<Restaurant>())
+            {
+                <tr>
+                    <td>@restaurant.Name</td>
+                    <td>@restaurant.OwnerEmailAddress</td>
+                    <td>@restaurant.Status</td>
+
+                    @if (context == "owner-restaurants")
+                    {
+                        <td>
+                            <a asp-action="Verification"
+                               asp-route-restaurantId="@restaurant.Id"
+                               class="btn btn-sm btn-outline-primary">
+                                Pending menu items
+                            </a>
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+else if (context == "owner-menuitems")
+{
+    <p>
+        <strong>Pending menu items</strong> for this restaurant.
+        <a asp-action="Verification" class="btn btn-link">Back to your restaurants</a>
+    </p>
+
+    <table class="table table-striped table-bordered">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Restaurant</th>
+                <th>Price</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var menuItem in Model.OfType<MenuItem>())
+            {
+                <tr>
+                    <td>@menuItem.Title</td>
+                    <td>@menuItem.Restaurant?.Name</td>
+                    <td>@menuItem.Price</td>
+                    <td>@menuItem.Status</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+else
+{
+    <p>No items found.</p>
+}

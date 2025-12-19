@@ -6,32 +6,38 @@ using BulkImportRestaurantApp.Infrastructure;
 using System.Diagnostics;
 using BulkImportRestaurantApp.Factories;
 
-
-
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
 builder.Services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = true)
     .AddEntityFrameworkStores<ApplicationDbContext>();
+
 builder.Services.AddControllersWithViews();
 
 builder.Services.AddMemoryCache();
 
+builder.Services.AddScoped<ImportItemFactory>();
 
+builder.Services.AddKeyedScoped<ItemsInMemoryRepository>("memory");
+builder.Services.AddKeyedScoped<IItemsRepository, ItemsInMemoryRepository>("memory");
 
-builder.Services.AddMemoryCache(); // for ItemsInMemoryRepository 
-builder.Services.AddScoped<ItemsDbRepository>();      // for ItemsController
+builder.Services.AddKeyedScoped<ItemsDbRepository>("database");
+builder.Services.AddKeyedScoped<IItemsRepository, ItemsDbRepository>("database");
+
+builder.Services.AddTransient<ImportItemFactory>();
+
+builder.Services.AddMemoryCache();
+
+builder.Services.AddScoped<ItemsDbRepository>();     
 
 AppSettings.SiteAdminEmail = builder.Configuration["SiteAdmin:Email"];
 
 var app = builder.Build();
-
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseMigrationsEndPoint();

@@ -18,7 +18,6 @@ namespace BulkImportRestaurantApp.Repositories
             _db = db;
         }
 
-        // -------- IItemsRepository basic methods --------
         public async Task SaveAsync(IEnumerable<IItemValidating> items)
         {
             foreach (var item in items)
@@ -52,7 +51,6 @@ namespace BulkImportRestaurantApp.Repositories
             return result;
         }
 
-
         public Task<List<Restaurant>> GetApprovedRestaurantsAsync()
         {
             return _db.Restaurants
@@ -76,7 +74,6 @@ namespace BulkImportRestaurantApp.Repositories
                 .ToListAsync();
         }
 
-
         public Task<List<Restaurant>> GetPendingRestaurantsAsync()
         {
             return _db.Restaurants
@@ -94,65 +91,68 @@ namespace BulkImportRestaurantApp.Repositories
         public Task<List<MenuItem>> GetPendingMenuItemsForRestaurantAsync(int restaurantId)
         {
             return _db.MenuItems
-                .Where(m => m.RestaurantId == restaurantId && m.Status == ItemStatus.Pending)
+                .Where(m => m.Status == ItemStatus.Pending && m.RestaurantId == restaurantId)
                 .Include(m => m.Restaurant)
                 .ToListAsync();
         }
 
-        // Optional helper for the filter later
-        public Task<List<Restaurant>> GetRestaurantsByIdsAsync(IEnumerable<int> ids)
+        public async Task ApproveAsync(IEnumerable<int> restaurantIds, IEnumerable<Guid> menuItemIds)
         {
-            var list = ids.ToList();
-            return _db.Restaurants
-                .Where(r => list.Contains(r.Id))
-                .ToListAsync();
-        }
+            var restaurantIdList = restaurantIds?.ToList() ?? new List<int>();
+            var menuItemIdList = menuItemIds?.ToList() ?? new List<Guid>();
 
-        public Task<List<MenuItem>> GetMenuItemsByIdsAsync(IEnumerable<Guid> ids)
-        {
-            var list = ids.ToList();
-            return _db.MenuItems
-                .Where(m => list.Contains(m.Id))
-                .Include(m => m.Restaurant)
-                .ToListAsync();
-        }
-
-        // -------- Approve method (SE3.3) --------
-        public async Task ApproveAsync(IEnumerable<int>? restaurantIds, IEnumerable<Guid>? menuItemIds)
-        {
-            if (restaurantIds != null)
+            if (restaurantIdList.Any())
             {
-                var restList = restaurantIds.ToList();
-                if (restList.Any())
-                {
-                    var restaurants = await _db.Restaurants
-                        .Where(r => restList.Contains(r.Id))
-                        .ToListAsync();
+                var restaurants = await _db.Restaurants
+                    .Where(r => restaurantIdList.Contains(r.Id))
+                    .ToListAsync();
 
-                    foreach (var r in restaurants)
-                    {
-                        r.Status = ItemStatus.Approved;
-                    }
+                foreach (var r in restaurants)
+                {
+                    r.Status = ItemStatus.Approved;
                 }
             }
 
-            if (menuItemIds != null)
+            if (menuItemIdList.Any())
             {
-                var menuList = menuItemIds.ToList();
-                if (menuList.Any())
-                {
-                    var menuItems = await _db.MenuItems
-                        .Where(m => menuList.Contains(m.Id))
-                        .ToListAsync();
+                var menuItems = await _db.MenuItems
+                    .Where(m => menuItemIdList.Contains(m.Id))
+                    .ToListAsync();
 
-                    foreach (var m in menuItems)
-                    {
-                        m.Status = ItemStatus.Approved;
-                    }
+                foreach (var m in menuItems)
+                {
+                    m.Status = ItemStatus.Approved;
                 }
             }
 
             await _db.SaveChangesAsync();
+        }
+
+        public async Task<List<IItemValidating>> GetItemsByIdsAsync(
+            IEnumerable<int> restaurantIds,
+            IEnumerable<Guid> menuItemIds)
+        {
+            var result = new List<IItemValidating>();
+
+            var rList = restaurantIds?.ToList() ?? new List<int>();
+            var mList = menuItemIds?.ToList() ?? new List<Guid>();
+
+            if (rList.Any())
+            {
+                result.AddRange(await _db.Restaurants
+                    .Where(r => rList.Contains(r.Id))
+                    .ToListAsync());
+            }
+
+            if (mList.Any())
+            {
+                result.AddRange(await _db.MenuItems
+                    .Where(m => mList.Contains(m.Id))
+                    .Include(m => m.Restaurant)
+                    .ToListAsync());
+            }
+
+            return result;
         }
     }
 }
