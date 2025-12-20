@@ -32,7 +32,7 @@
                 <tr>
                     <td>Menu Item</td>
                     <td>@menu.Title</td>
-                    <td>@menu.Restaurant</td>
+                    <td>@(menu.Restaurant != null ? menu.Restaurant.Name : "—")</td>
                     <td>@menu.Status</td>
                 </tr>
             }

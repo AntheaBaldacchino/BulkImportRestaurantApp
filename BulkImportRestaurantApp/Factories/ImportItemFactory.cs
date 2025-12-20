@@ -1,7 +1,8 @@
-﻿using BulkImportRestaurantApp.Models;
-using BulkImportRestaurantApp.Models.Interfaces;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+﻿using System;
+using System.Collections.Generic;
 using System.Text.Json;
+using BulkImportRestaurantApp.Models;
+using BulkImportRestaurantApp.Models.Interfaces;
 
 namespace BulkImportRestaurantApp.Factories
 {
@@ -9,53 +10,83 @@ namespace BulkImportRestaurantApp.Factories
     {
         public List<IItemValidating> Create(string json)
         {
-            var items = new List<IItemValidating>();
-            
-            //returns a list of instances of classes inheriting itemvalidating
-            using var document = JsonDocument.Parse(json);
+            if (string.IsNullOrWhiteSpace(json))
+                throw new ArgumentException("JSON cannot be empty.", nameof(json));
 
+            using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
 
-            // iterate over each element and deserializes based on "type" property
-            
-            foreach(var element in root.EnumerateArray())
+            if (root.ValueKind != JsonValueKind.Array)
+                throw new InvalidOperationException("Root JSON element must be an array.");
+
+            var items = new List<IItemValidating>();
+
+            var restaurantMap = new Dictionary<string, Restaurant>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var element in root.EnumerateArray())
             {
-                string type = element.GetProperty("type").GetString()?.ToLower();
+                var type = element.GetProperty("type").GetString()?.Trim().ToLowerInvariant();
+                if (type != "restaurant")
+                    continue;
 
-                if (type == "restaurant") {
+                var externalId = element.GetProperty("id").GetString();
+                if (string.IsNullOrWhiteSpace(externalId))
+                    throw new InvalidOperationException("Restaurant missing id in JSON.");
 
-                    var restaurant = new Restaurant
-                    {
-                        Name = element.GetProperty("name").GetString()!,
-                        OwnerEmailAddress = element.GetProperty("ownerEmailAddress").GetString()!,
-                        Status = ItemStatus.Pending
-                    };
-                    items.Add(restaurant);
-                    //name
-                    //owneremailaddress
-                    //status
-                }
-                else if (type == "menuitem")
+                var restaurant = new Restaurant
                 {
-                    var menuItem = new MenuItem
-                    {
-                        Id = Guid.NewGuid(),
-                        Title = element.GetProperty("title").GetString()!,
-                        Price = element.GetProperty("price").GetDecimal()!,
-                        Status = ItemStatus.Pending
+                    Name = element.GetProperty("name").GetString() ?? string.Empty,
+                    OwnerEmailAddress = element.GetProperty("ownerEmailAddress").GetString() ?? string.Empty,
+                    Status = ItemStatus.Pending
+                };
 
-
-                    };
-                    items.Add(menuItem);
-                    //id 
-                    //title
-                    //price
-                    //status
-                    
-                }
+                restaurantMap[externalId] = restaurant;
+                items.Add(restaurant);
             }
+
+          
+            static string? ReadRestaurantId(JsonElement element)
+            {
+                if (element.TryGetProperty("restaurantId", out var directProp))
+                    return directProp.GetString();
+
+                foreach (var prop in element.EnumerateObject())
+                {
+                    if (prop.Name.Trim().Equals("restaurantId", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return prop.Value.GetString();
+                    }
+                }
+
+                return null;
+            }
+
+            foreach (var element in root.EnumerateArray())
+            {
+                var type = element.GetProperty("type").GetString()?.Trim().ToLowerInvariant();
+                if (type != "menuitem")
+                    continue;
+
+                var restaurantJsonId = ReadRestaurantId(element);
+                if (string.IsNullOrWhiteSpace(restaurantJsonId) ||
+                    !restaurantMap.TryGetValue(restaurantJsonId, out var parentRestaurant))
+                {
+                  
+                    continue;
+                }
+
+                var menuItem = new MenuItem
+                {
+                    Title = element.GetProperty("title").GetString() ?? string.Empty,
+                    Price = element.GetProperty("price").GetDecimal(),
+                    Status = ItemStatus.Pending,
+                    Restaurant = parentRestaurant
+                };
+
+                items.Add(menuItem);
+            }
+
             return items;
         }
-
     }
 }

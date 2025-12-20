@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using BulkImportRestaurantApp.Infrastructure;
 using System.Diagnostics;
 using BulkImportRestaurantApp.Factories;
+using BulkImportRestaurantApp.Filters;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,6 +31,11 @@ builder.Services.AddKeyedScoped<ItemsDbRepository>("database");
 builder.Services.AddKeyedScoped<IItemsRepository, ItemsDbRepository>("database");
 
 builder.Services.AddTransient<ImportItemFactory>();
+
+
+builder.Services.AddScoped<ImportItemFactory>();
+builder.Services.AddScoped<ApprovalAuthorizeFilter>();
+
 
 builder.Services.AddMemoryCache();
 

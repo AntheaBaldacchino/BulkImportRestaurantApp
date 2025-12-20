@@ -1,0 +1,71 @@
+﻿@model BulkImportRestaurantApp.Controllers.PendingItemsViewModel
+
+@using BulkImportRestaurantApp.Models
+
+<h2>Pending items for verification</h2>
+
+@if (Model.PendingRestaurants.Any())
+{
+    <h3>Pending restaurants (Site Admin)</h3>
+    <div class="row">
+        @foreach (var r in Model.PendingRestaurants)
+        {
+            <div class="col-md-4 mb-3">
+                <partial name="@r.GetCardPartial()" model="r" />
+
+                <form asp-action="ApproveRestaurant" method="post" class="mt-2">
+                    <input type="hidden" name="id" value="@r.Id" />
+                    <hr />
+                    <button type="submit" class="btn btn-success btn-sm">
+                        Approve restaurant
+                    </button>
+                    @Html.AntiForgeryToken()
+                </form>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <p>No pending restaurants for you.</p>
+}
+
+@if (Model.PendingMenuItems.Any())
+{
+    <h3>Pending menu items (Restaurant owner)</h3>
+
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Restaurant</th>
+                <th>Price</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var m in Model.PendingMenuItems)
+            {
+                <tr>
+                    <td>@m.Title</td>
+                    <td>@m.Restaurant?.Name</td>
+                    <td>@m.Price.ToString("0.00")</td>
+                    <td>
+                        <form asp-action="ApproveMenuItem" method="post">
+                            <input type="hidden" name="id" value="@m.Id" />
+                            <hr />
+                            <button type="submit" class="btn btn-success btn-sm">
+                                Approve
+                            </button>
+                            @Html.AntiForgeryToken()
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+else
+{
+    <p>No pending menu items for you.</p>
+}

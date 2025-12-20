@@ -6,6 +6,8 @@ namespace BulkImportRestaurantApp.Models
 {
     public class Restaurant : IItemValidating 
     {
+        public ICollection<MenuItem> MenuItems { get; set; } = new List<MenuItem>();
+
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int Id { get; set; }
@@ -34,5 +36,7 @@ namespace BulkImportRestaurantApp.Models
                 Infrastructure.AppSettings.SiteAdminEmail
             };
         }
+
+
     }
 }

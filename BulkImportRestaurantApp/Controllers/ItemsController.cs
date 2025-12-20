@@ -1,9 +1,14 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using BulkImportRestaurantApp.Infrastructure;
+using BulkImportRestaurantApp.Models;
 using BulkImportRestaurantApp.Models.Interfaces;
 using BulkImportRestaurantApp.Repositories;
-using Microsoft.AspNetCore.Mvc;
+using BulkImportRestaurantApp.Filters;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace BulkImportRestaurantApp.Controllers
 {
@@ -11,14 +16,12 @@ namespace BulkImportRestaurantApp.Controllers
     {
         private readonly ItemsDbRepository _dbRepository;
 
-        public ItemsController(
-             ItemsDbRepository dbRepository)
+        public ItemsController(ItemsDbRepository dbRepository)
         {
             _dbRepository = dbRepository;
         }
 
-        // /Items/Catalog?mode=restaurants
-        // /Items/Catalog?mode=menuitems&restaurantId=1
+       
         [HttpGet]
         [AllowAnonymous]
         public async Task<IActionResult> Catalog(string view = "restaurants", int? restaurantId = null)
@@ -29,7 +32,6 @@ namespace BulkImportRestaurantApp.Controllers
             {
                 var restaurants = await _dbRepository.GetApprovedRestaurantsAsync();
                 items = restaurants;
-        
             }
             else
             {
@@ -38,18 +40,66 @@ namespace BulkImportRestaurantApp.Controllers
                     var menuItems = await _dbRepository
                         .GetApprovedMenuItemsForRestaurantAsync(restaurantId.Value);
                     items = menuItems;
-                    ViewBag.Mode = "menuitems";
                     ViewBag.RestaurantId = restaurantId.Value;
                 }
                 else
                 {
                     var menuItems = await _dbRepository.GetAllApprovedMenuItemsAsync();
                     items = menuItems;
-             
                 }
             }
+
             ViewBag.ViewMode = view;
+            ViewBag.ApproveMode = false;
             return View("Catalog", items);
+        }
+
+        [HttpGet]
+        [Authorize]
+        public async Task<IActionResult> Verification()
+        {
+            var email = User.FindFirstValue(ClaimTypes.Email)
+                        ?? User.Identity?.Name;
+
+            if (string.IsNullOrWhiteSpace(email))
+                return Challenge(); 
+
+            var isSiteAdmin = string.Equals(
+                email,
+                AppSettings.SiteAdminEmail,
+                StringComparison.OrdinalIgnoreCase);
+
+            IEnumerable<IItemValidating> items;
+            string viewMode;
+
+            if (isSiteAdmin)
+            {
+                
+                var pendingRestaurants = await _dbRepository.GetPendingRestaurantsAsync();
+                items = pendingRestaurants;
+                viewMode = "verify-restaurants";
+            }
+            else
+            {
+                
+                var pendingMenuItems = await _dbRepository.GetPendingMenuItemsForOwnerAsync(email);
+                items = pendingMenuItems;
+                viewMode = "verify-menu";
+            }
+
+            ViewBag.ViewMode = viewMode;
+            return View("Catalog", items); 
+        }
+
+        [HttpPost]
+        [Authorize]
+        [ServiceFilter(typeof(ApprovalAuthorizeFilter))]
+        public async Task<IActionResult> Approve(
+            int[] restaurantIds,
+            Guid[] menuItemIds)
+        {
+            await _dbRepository.ApproveAsync(restaurantIds, menuItemIds);
+            return RedirectToAction(nameof(Verification));
         }
     }
 }

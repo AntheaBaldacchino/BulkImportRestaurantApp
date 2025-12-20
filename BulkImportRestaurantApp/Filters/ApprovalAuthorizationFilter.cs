@@ -2,54 +2,83 @@
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using BulkImportRestaurantApp.Data;
+using BulkImportRestaurantApp.Models;
 using BulkImportRestaurantApp.Models.Interfaces;
-using BulkImportRestaurantApp.Repositories;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.EntityFrameworkCore;
 
 namespace BulkImportRestaurantApp.Filters
 {
-    public class ApprovalAuthorizationFilter : IAsyncActionFilter
+    public class ApprovalAuthorizeFilter : IAsyncActionFilter
     {
-        private readonly ItemsDbRepository _dbRepository;
+        private readonly ApplicationDbContext _db;
 
-        public ApprovalAuthorizationFilter(ItemsDbRepository dbRepository)
+        public ApprovalAuthorizeFilter(ApplicationDbContext db)
         {
-            _dbRepository = dbRepository;
+            _db = db;
         }
 
-        public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+        public async Task OnActionExecutionAsync(
+            ActionExecutingContext context,
+            ActionExecutionDelegate next)
         {
-            var user = context.HttpContext.User;
-            if (!user.Identity?.IsAuthenticated ?? true)
+            // get logged-in email (Identity)
+            var email = context.HttpContext.User.FindFirstValue(ClaimTypes.Email)
+                        ?? context.HttpContext.User.Identity?.Name;
+
+            if (string.IsNullOrWhiteSpace(email))
             {
                 context.Result = new ForbidResult();
                 return;
             }
 
-            var userEmail =
-                user.FindFirst(ClaimTypes.Email)?.Value ??
-                user.Identity?.Name ??
-                string.Empty;
-
+            // Read IDs from action parameters
             context.ActionArguments.TryGetValue("restaurantIds", out var rObj);
             context.ActionArguments.TryGetValue("menuItemIds", out var mObj);
 
-            var restaurantIds = (rObj as int[]) ?? Array.Empty<int>();
-            var menuItemIds = (mObj as Guid[]) ?? Array.Empty<Guid>();
+            var restaurantIds = rObj as int[] ?? Array.Empty<int>();
+            var menuItemIds = mObj as Guid[] ?? Array.Empty<Guid>();
 
-            var items = await _dbRepository.GetItemsByIdsAsync(restaurantIds, menuItemIds);
-
-            var notAllowed = items.Any(item =>
-                !item.GetValidators()
-                    .Any(v => string.Equals(v, userEmail, StringComparison.OrdinalIgnoreCase)));
-
-            if (notAllowed)
+            // Load restaurants and check validators
+            if (restaurantIds.Length > 0)
             {
-                context.Result = new ForbidResult();
-                return;
+                var restaurants = await _db.Restaurants
+                    .Where(r => restaurantIds.Contains(r.Id))
+                    .ToListAsync();
+
+                foreach (var r in restaurants)
+                {
+                    if (!r.GetValidators()
+                          .Any(v => string.Equals(v, email, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        context.Result = new ForbidResult();
+                        return;
+                    }
+                }
             }
 
+            // Load menu items and check validators (uses Restaurant.OwnerEmailAddress)
+            if (menuItemIds.Length > 0)
+            {
+                var menuItems = await _db.MenuItems
+                    .Where(m => menuItemIds.Contains(m.Id))
+                    .Include(m => m.Restaurant)
+                    .ToListAsync();
+
+                foreach (var m in menuItems)
+                {
+                    if (!m.GetValidators()
+                          .Any(v => string.Equals(v, email, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        context.Result = new ForbidResult();
+                        return;
+                    }
+                }
+            }
+
+            // All good → continue to action
             await next();
         }
     }

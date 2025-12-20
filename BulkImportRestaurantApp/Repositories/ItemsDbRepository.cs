@@ -96,36 +96,43 @@ namespace BulkImportRestaurantApp.Repositories
                 .ToListAsync();
         }
 
-        public async Task ApproveAsync(IEnumerable<int> restaurantIds, IEnumerable<Guid> menuItemIds)
+        public Task<List<MenuItem>> GetPendingMenuItemsForOwnerAsync(string ownerEmail)
         {
-            var restaurantIdList = restaurantIds?.ToList() ?? new List<int>();
-            var menuItemIdList = menuItemIds?.ToList() ?? new List<Guid>();
+            return _db.MenuItems
+                .Where(m => m.Status == ItemStatus.Pending &&
+                            m.Restaurant.OwnerEmailAddress == ownerEmail)
+                .Include(m => m.Restaurant)
+                .ToListAsync();
+        }
+        public async Task ApproveAsync(
+         IEnumerable<int> restaurantIds,
+         IEnumerable<Guid> menuItemIds) 
+        {
+            var rIds = restaurantIds?.ToList() ?? new List<int>();
+            var mIds = menuItemIds?.ToList() ?? new List<Guid>();
 
-            if (restaurantIdList.Any())
+            if (rIds.Count > 0)
             {
                 var restaurants = await _db.Restaurants
-                    .Where(r => restaurantIdList.Contains(r.Id))
+                    .Where(r => rIds.Contains(r.Id))
                     .ToListAsync();
 
                 foreach (var r in restaurants)
-                {
                     r.Status = ItemStatus.Approved;
-                }
             }
 
-            if (menuItemIdList.Any())
+            if (mIds.Count > 0)
             {
                 var menuItems = await _db.MenuItems
-                    .Where(m => menuItemIdList.Contains(m.Id))
+                    .Where(m => mIds.Contains(m.Id))
                     .ToListAsync();
 
                 foreach (var m in menuItems)
-                {
                     m.Status = ItemStatus.Approved;
-                }
             }
 
             await _db.SaveChangesAsync();
+        
         }
 
         public async Task<List<IItemValidating>> GetItemsByIdsAsync(
@@ -154,5 +161,48 @@ namespace BulkImportRestaurantApp.Repositories
 
             return result;
         }
+
+        public Task<List<Restaurant>> GetPendingRestaurantsForAdminAsync()
+        {
+            // Only admin (SiteAdminEmail) should see this in the controller
+            return _db.Restaurants
+                .Where(r => r.Status == ItemStatus.Pending)
+                .ToListAsync();
+        }
+
+        public async Task<bool> ApproveRestaurantAsync(int id)
+        {
+            var restaurant = await _db.Restaurants.FindAsync(id);
+            if (restaurant == null)
+                return false;
+
+            restaurant.Status = ItemStatus.Approved;
+            await _db.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> ApproveMenuItemAsync(Guid id, string currentUserEmail, bool isAdmin)
+        {
+            var menuItem = await _db.MenuItems
+                .Include(m => m.Restaurant)
+                .FirstOrDefaultAsync(m => m.Id == id);
+
+            if (menuItem == null)
+                return false;
+
+       
+            var ownerEmail = menuItem.Restaurant.OwnerEmailAddress;
+
+            if (!isAdmin &&
+                !string.Equals(ownerEmail, currentUserEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            menuItem.Status = ItemStatus.Approved;
+            await _db.SaveChangesAsync();
+            return true;
+        }
+
     }
 }
