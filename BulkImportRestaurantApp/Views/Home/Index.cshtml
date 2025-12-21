@@ -1,8 +1,36 @@
 ﻿@{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "Home";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<h1>Bulk Import Restaurant App</h1>
+
+<p class="lead">
+    Quick navigation:
+</p>
+
+<div class="mb-3">
+    <a asp-area="Identity" asp-page="/Account/Register" class="btn btn-primary me-2">
+        Register
+    </a>
+    <a asp-area="Identity" asp-page="/Account/Login" class="btn btn-outline-primary me-2">
+        Login
+    </a>
+</div>
+
+<div class="mb-3">
+    <a asp-controller="BulkImport" asp-action="Index" class="btn btn-success me-2">
+        Bulk Import (JSON & Images)
+    </a>
+    <a asp-controller="Items" asp-action="Catalog" asp-route-view="restaurants" class="btn btn-outline-success me-2">
+        View Catalog (Restaurants)
+    </a>
+    <a asp-controller="Items" asp-action="Catalog" asp-route-view="menu" class="btn btn-outline-secondary me-2">
+        View Catalog (Menu Items)
+    </a>
+</div>
+
+<div class="mb-3">
+    <a asp-controller="Items" asp-action="Verification" class="btn btn-warning">
+        Verification (Pending Approvals)
+    </a>
 </div>
